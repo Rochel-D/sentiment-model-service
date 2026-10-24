@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sentiment Checker</title>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --ink: #1c1c1c;
+    --muted: #6b6b6b;
+    --pos: #2e7d5b;
+    --neg: #b34a3c;
+    --accent: #2f4b7c;
+    --border: #e2e0d8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px;
+  }
+  main { width: 100%; max-width: 560px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 28px; font-size: 0.95rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+  textarea {
+    width: 100%; min-height: 110px; padding: 12px; border-radius: 8px;
+    border: 1px solid var(--border); font-family: inherit; font-size: 1rem; resize: vertical;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    margin-top: 14px; background: var(--accent); color: white; border: none;
+    padding: 10px 20px; border-radius: 8px; font-size: 0.95rem; cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button:hover:not(:disabled) { opacity: 0.9; }
+  #result { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); display: none; }
+  .label { font-size: 1.4rem; font-weight: 600; text-transform: capitalize; }
+  .label.positive { color: var(--pos); }
+  .label.negative { color: var(--neg); }
+  .confidence { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+  .bars { margin-top: 14px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.85rem; }
+  .bar-row .name { width: 70px; text-transform: capitalize; color: var(--muted); }
+  .bar-track { flex: 1; background: var(--border); border-radius: 6px; height: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); }
+  .bar-row .pct { width: 42px; text-align: right; color: var(--muted); }
+  #error { display: none; margin-top: 16px; color: var(--neg); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sentiment Checker</h1>
+  <p class="sub">Type a sentence and see what the model predicts.</p>
+
+  <div class="panel">
+    <textarea id="textInput" placeholder="e.g. This movie was surprisingly good, I'd watch it again."></textarea>
+    <br />
+    <button id="predictBtn">Predict</button>
+
+    <div id="result">
+      <div class="label" id="labelText"></div>
+      <div class="confidence" id="confidenceText"></div>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div id="error"></div>
+  </div>
+</main>
+
+<script>
+  const API_URL = "/predict";
+
+  const btn = document.getElementById("predictBtn");
+  const input = document.getElementById("textInput");
+  const resultBox = document.getElementById("result");
+  const errorBox = document.getElementById("error");
+  const labelText = document.getElementById("labelText");
+  const confidenceText = document.getElementById("confidenceText");
+  const bars = document.getElementById("bars");
+
+  async function runPredict() {
+    const text = input.value.trim();
+    errorBox.style.display = "none";
+    resultBox.style.display = "none";
+
+    if (!text) {
+      errorBox.textContent = "Please enter some text first.";
+      errorBox.style.display = "block";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Predicting...";
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Request failed (${res.status})`);
+      }
+
+      const data = await res.json();
+
+      labelText.textContent = data.label;
+      labelText.className = "label " + data.label.toLowerCase();
+      confidenceText.textContent =
+        "Confidence: " + (data.confidence * 100).toFixed(1) + "%";
+
+      bars.innerHTML = "";
+      Object.entries(data.scores).forEach(([name, score]) => {
+        const pct = (score * 100).toFixed(1);
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        row.innerHTML = `
+          <div class="name">${name}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="pct">${pct}%</div>
+        `;
+        bars.appendChild(row);
+      });
+
+      resultBox.style.display = "block";
+    } catch (err) {
+      errorBox.textContent = "Error: " + err.message + " — is the API running at " + API_URL + "?";
+      errorBox.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Predict";
+    }
+  }
+
+  btn.addEventListener("click", runPredict);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.ctrlKey) runPredict();
+  });
+</script>
+</body>
+</html>

@@ -4,7 +4,16 @@ from pydantic import BaseModel, Field
 
 from app.model import predict, get_model_and_tokenizer, MODEL_NAME
 
+# add near your other imports at the top
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
 app = FastAPI(title="Sentiment Prediction Service", version="1.0.0")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,8 +40,8 @@ def load_model_on_startup():
 
 
 @app.get("/")
-def root():
-    return {"status": "ok", "model": MODEL_NAME}
+def home():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")
